@@ -1,7 +1,7 @@
 {
   "name": "tambola-platform",
   "private": true,
-  "packageManager": "pnpm@9.15.0",
+  "packageManager": "pnpm@10.2.0",
   "scripts": {
     "dev": "turbo run dev --parallel",
     "build": "turbo run build",
