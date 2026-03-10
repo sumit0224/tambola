@@ -1,0 +1,59 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: game-orchestrator
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: game-orchestrator
+  template:
+    metadata:
+      labels:
+        app: game-orchestrator
+    spec:
+      containers:
+        - name: game-orchestrator
+          image: ghcr.io/example/tambola-game-orchestrator:latest
+          ports:
+            - containerPort: 3030
+          env:
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: tambola-secrets
+                  key: database-url
+            - name: REDIS_URL
+              valueFrom:
+                secretKeyRef:
+                  name: tambola-secrets
+                  key: redis-url
+            - name: KAFKA_BROKERS
+              value: kafka:9092
+            - name: FF_KAFKA_EVENTS
+              value: "1"
+            - name: FF_GAME_ORCHESTRATOR
+              value: "1"
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: 3030
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 3030
+            initialDelaySeconds: 10
+            periodSeconds: 20
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: game-orchestrator
+spec:
+  selector:
+    app: game-orchestrator
+  ports:
+    - port: 3030
+      targetPort: 3030

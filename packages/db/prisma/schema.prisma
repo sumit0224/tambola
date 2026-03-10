@@ -1,0 +1,351 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum RoomStatus {
+  LOBBY
+  ACTIVE
+  ENDED
+  EXPIRED
+}
+
+enum ClaimType {
+  TOP_ROW
+  MIDDLE_ROW
+  BOTTOM_ROW
+  EARLY_FIVE
+  FULL_HOUSE
+}
+
+enum ClaimStatus {
+  PENDING
+  VALID
+  INVALID
+  DUPLICATE
+  REJECTED
+}
+
+enum SessionStatus {
+  ACTIVE
+  REVOKED
+  EXPIRED
+}
+
+enum GameSessionStatus {
+  RUNNING
+  PAUSED
+  ENDED
+}
+
+enum FraudSeverity {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum EnforcementStatus {
+  OPEN
+  APPLIED
+  CLEARED
+  DISMISSED
+}
+
+model User {
+  id           String              @id @default(uuid()) @db.Uuid
+  email        String              @unique @db.VarChar(320)
+  displayName  String              @db.VarChar(60)
+  avatarUrl    String?
+  passwordHash String?
+  provider     String              @default("local") @db.VarChar(20)
+  providerId   String?
+  createdAt    DateTime            @default(now())
+  lastSeenAt   DateTime?
+
+  sessions           Session[]
+  rooms              Room[]              @relation("RoomHost")
+  roomPlayers        RoomPlayer[]
+  tickets            Ticket[]
+  claims             Claim[]
+  winners            Winner[]
+  fraudEvents        FraudEvent[]
+  deviceFingerprints DeviceFingerprint[]
+  riskScores         RiskScore[]
+  enforcementActions EnforcementAction[]
+
+  @@index([createdAt])
+  @@map("users")
+}
+
+model Session {
+  id                String         @id @default(uuid()) @db.Uuid
+  userId            String         @db.Uuid
+  refreshTokenHash  String         @unique @db.VarChar(128)
+  accessJti         String         @unique @db.VarChar(64)
+  deviceId          String         @db.VarChar(128)
+  ipAddress         String?        @db.VarChar(64)
+  userAgent         String?
+  status            SessionStatus  @default(ACTIVE)
+  createdAt         DateTime       @default(now())
+  expiresAt         DateTime
+  revokedAt         DateTime?
+  rotatedFromId     String?        @db.Uuid
+
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  rotatedFrom Session?  @relation("SessionRotation", fields: [rotatedFromId], references: [id])
+  rotatedTo   Session[] @relation("SessionRotation")
+
+  @@index([userId, status])
+  @@index([expiresAt])
+  @@map("sessions")
+}
+
+model DeviceFingerprint {
+  id              String   @id @default(uuid()) @db.Uuid
+  userId          String?  @db.Uuid
+  fingerprintHash String   @db.VarChar(128)
+  platform        String?  @db.VarChar(32)
+  appVersion      String?  @db.VarChar(32)
+  firstSeenAt     DateTime @default(now())
+  lastSeenAt      DateTime @default(now())
+  lastIpAddress   String?  @db.VarChar(64)
+
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@unique([userId, fingerprintHash])
+  @@index([fingerprintHash])
+  @@index([lastSeenAt])
+  @@map("device_fingerprints")
+}
+
+model Room {
+  id           String       @id @default(uuid()) @db.Uuid
+  roomCode     String       @unique @db.Char(6)
+  hostId       String       @db.Uuid
+  host         User         @relation("RoomHost", fields: [hostId], references: [id], onDelete: Restrict)
+  status       RoomStatus   @default(LOBBY)
+  maxPlayers   Int          @default(50) @db.SmallInt
+  callInterval Int          @default(5) @db.SmallInt
+  createdAt    DateTime     @default(now())
+  startedAt    DateTime?
+  endedAt      DateTime?
+  config       Json         @default("{}")
+
+  players            RoomPlayer[]
+  tickets            Ticket[]
+  gameSessions       GameSession[]
+  gameNumbers        GameNumber[]
+  gameEvents         GameEvent[]
+  gameSnapshots      GameSnapshot[]
+  claims             Claim[]
+  winners            Winner[]
+  fraudEvents        FraudEvent[]
+  riskScores         RiskScore[]
+  enforcementActions EnforcementAction[]
+
+  @@index([status, createdAt])
+  @@index([hostId])
+  @@map("rooms")
+}
+
+model RoomPlayer {
+  id       String   @id @default(uuid()) @db.Uuid
+  roomId   String   @db.Uuid
+  userId   String   @db.Uuid
+  joinedAt DateTime @default(now())
+  leftAt   DateTime?
+  isActive Boolean  @default(true)
+
+  room Room @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([roomId, userId])
+  @@index([roomId, isActive])
+  @@index([userId])
+  @@map("room_players")
+}
+
+model GameSession {
+  id            String            @id @default(uuid()) @db.Uuid
+  roomId         String            @db.Uuid
+  status         GameSessionStatus @default(RUNNING)
+  rngSeed        String            @db.VarChar(64)
+  callInterval   Int               @db.SmallInt
+  currentOffset  Int               @default(0)
+  startedAt      DateTime          @default(now())
+  pausedAt       DateTime?
+  resumedAt      DateTime?
+  endedAt        DateTime?
+
+  room        Room           @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  events      GameEvent[]
+  snapshots   GameSnapshot[]
+
+  @@index([roomId, status])
+  @@index([startedAt])
+  @@map("game_sessions")
+}
+
+model GameEvent {
+  id            String      @id @default(uuid()) @db.Uuid
+  roomId         String      @db.Uuid
+  gameSessionId  String?     @db.Uuid
+  eventType      String      @db.VarChar(64)
+  eventOffset    Int
+  eventId        String      @unique @db.VarChar(64)
+  occurredAt     DateTime    @default(now())
+  payload        Json
+
+  room        Room         @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  gameSession GameSession? @relation(fields: [gameSessionId], references: [id], onDelete: SetNull)
+
+  @@unique([roomId, eventOffset])
+  @@index([roomId, occurredAt])
+  @@index([gameSessionId, eventOffset])
+  @@map("game_events")
+}
+
+model GameSnapshot {
+  id            String      @id @default(uuid()) @db.Uuid
+  roomId         String      @db.Uuid
+  gameSessionId  String?     @db.Uuid
+  eventOffset    Int
+  gameState      Json
+  calledNumbers  Int[]
+  createdAt      DateTime    @default(now())
+
+  room        Room         @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  gameSession GameSession? @relation(fields: [gameSessionId], references: [id], onDelete: SetNull)
+
+  @@index([roomId, eventOffset])
+  @@index([gameSessionId, eventOffset])
+  @@map("game_snapshots")
+}
+
+model Ticket {
+  id        String   @id @default(uuid()) @db.Uuid
+  roomId    String   @db.Uuid
+  userId    String   @db.Uuid
+  grid      Json
+  rowSums   Int[]
+  createdAt DateTime @default(now())
+
+  room Room @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([roomId, userId])
+  @@index([roomId])
+  @@map("tickets")
+}
+
+model GameNumber {
+  id        String   @id @default(uuid()) @db.Uuid
+  roomId    String   @db.Uuid
+  number    Int      @db.SmallInt
+  callIndex Int      @db.SmallInt
+  calledAt  DateTime @default(now())
+
+  room Room @relation(fields: [roomId], references: [id], onDelete: Cascade)
+
+  @@unique([roomId, number])
+  @@index([roomId, callIndex])
+  @@map("game_numbers")
+}
+
+model Claim {
+  id                 String      @id @default(uuid()) @db.Uuid
+  roomId             String      @db.Uuid
+  userId             String      @db.Uuid
+  claimType          ClaimType
+  status             ClaimStatus @default(PENDING)
+  reason             String?
+  eventOffset        Int?
+  validatedAt        DateTime    @default(now())
+  calledNumsSnapshot Int[]
+
+  room Room @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([roomId, claimType])
+  @@index([userId, validatedAt])
+  @@map("claims")
+}
+
+model Winner {
+  id         String    @id @default(uuid()) @db.Uuid
+  roomId      String    @db.Uuid
+  claimType   ClaimType
+  userId      String    @db.Uuid
+  claimId     String?   @db.Uuid
+  announcedAt DateTime  @default(now())
+
+  room  Room  @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  claim Claim? @relation(fields: [claimId], references: [id], onDelete: SetNull)
+
+  @@unique([roomId, claimType])
+  @@index([userId, announcedAt])
+  @@map("winners")
+}
+
+model FraudEvent {
+  id          String        @id @default(uuid()) @db.Uuid
+  roomId       String?       @db.Uuid
+  userId       String?       @db.Uuid
+  claimId      String?       @db.Uuid
+  eventType    String        @db.VarChar(64)
+  severity     FraudSeverity @default(LOW)
+  score        Float         @default(0)
+  payload      Json
+  createdAt    DateTime      @default(now())
+
+  room  Room?  @relation(fields: [roomId], references: [id], onDelete: SetNull)
+  user  User?  @relation(fields: [userId], references: [id], onDelete: SetNull)
+  claim Claim? @relation(fields: [claimId], references: [id], onDelete: SetNull)
+
+  @@index([roomId, createdAt])
+  @@index([userId, createdAt])
+  @@index([severity, createdAt])
+  @@map("fraud_events")
+}
+
+model RiskScore {
+  id          String    @id @default(uuid()) @db.Uuid
+  roomId       String?   @db.Uuid
+  userId       String    @db.Uuid
+  score        Float
+  modelVersion String    @db.VarChar(32)
+  reasons      Json
+  measuredAt   DateTime  @default(now())
+
+  room Room? @relation(fields: [roomId], references: [id], onDelete: SetNull)
+  user User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, measuredAt])
+  @@index([roomId, measuredAt])
+  @@map("risk_scores")
+}
+
+model EnforcementAction {
+  id          String            @id @default(uuid()) @db.Uuid
+  roomId       String?           @db.Uuid
+  userId       String            @db.Uuid
+  actionType   String            @db.VarChar(64)
+  status       EnforcementStatus @default(OPEN)
+  reason       String?
+  expiresAt    DateTime?
+  createdAt    DateTime          @default(now())
+  updatedAt    DateTime          @updatedAt
+
+  room Room? @relation(fields: [roomId], references: [id], onDelete: SetNull)
+  user User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, status])
+  @@index([roomId, status])
+  @@map("enforcement_actions")
+}

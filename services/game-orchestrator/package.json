@@ -1,0 +1,25 @@
+{
+  "name": "@tambola/game-orchestrator",
+  "private": true,
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc -p tsconfig.json",
+    "start": "node dist/index.js",
+    "lint": "echo 'add eslint config'",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@fastify/cors": "^10.0.2",
+    "@tambola/config": "workspace:*",
+    "@tambola/db": "workspace:*",
+    "@tambola/events": "workspace:*",
+    "@tambola/observability": "workspace:*",
+    "@tambola/redis": "workspace:*",
+    "@tambola/types": "workspace:*",
+    "fastify": "^5.1.0"
+  },
+  "devDependencies": {
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.3"
+  }
+}

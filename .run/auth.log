@@ -1,0 +1,6 @@
+
+> @tambola/auth-service@ dev /Users/sumitgautam/Desktop/tambola/services/auth-service
+> tsx watch src/index.ts
+
+{"level":30,"time":1773062821242,"pid":11446,"hostname":"sumits-MacBook-Air.local","msg":"Server listening at http://127.0.0.1:3001"}
+{"level":30,"time":1773062821242,"pid":11446,"hostname":"sumits-MacBook-Air.local","msg":"Server listening at http://192.168.1.26:3001"}

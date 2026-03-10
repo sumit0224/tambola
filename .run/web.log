@@ -1,0 +1,11 @@
+
+> @tambola/web@ dev /Users/sumitgautam/Desktop/tambola/apps/web
+> next dev -p 3000
+
+  ▲ Next.js 14.2.20
+  - Local:        http://localhost:3000
+  - Experiments (use with caution):
+    · typedRoutes
+
+ ✓ Starting...
+ ✓ Ready in 2.1s

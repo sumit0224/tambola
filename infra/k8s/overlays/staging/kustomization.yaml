@@ -1,0 +1,12 @@
+resources:
+  - ../../base/game-service-deployment.yaml
+  - ../../base/room-service-deployment.yaml
+  - ../../base/api-gateway-deployment.yaml
+  - ../../base/realtime-gateway-deployment.yaml
+  - ../../base/game-orchestrator-deployment.yaml
+  - ../../base/api-gateway-hpa.yaml
+  - ../../base/realtime-gateway-hpa.yaml
+  - ../../base/game-orchestrator-hpa.yaml
+  - ../../base/redis-cluster.yaml
+  - ../../base/postgres-statefulset.yaml
+  - ../../base/kafka-statefulset.yaml

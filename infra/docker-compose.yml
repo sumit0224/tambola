@@ -1,0 +1,90 @@
+version: "3.9"
+
+services:
+  postgres:
+    image: postgres:15
+    environment:
+      POSTGRES_DB: tambola
+      POSTGRES_USER: tambola
+      POSTGRES_PASSWORD: tambola
+    ports:
+      - "5432:5432"
+
+  redis:
+    image: redis:7
+    command: ["redis-server", "--appendonly", "yes"]
+    ports:
+      - "6379:6379"
+
+  zookeeper:
+    image: bitnami/zookeeper:3.9
+    environment:
+      ALLOW_ANONYMOUS_LOGIN: "yes"
+    ports:
+      - "2181:2181"
+
+  kafka:
+    image: bitnami/kafka:3.6
+    depends_on:
+      - zookeeper
+    environment:
+      KAFKA_CFG_ZOOKEEPER_CONNECT: zookeeper:2181
+      ALLOW_PLAINTEXT_LISTENER: "yes"
+      KAFKA_CFG_LISTENERS: PLAINTEXT://:9092
+      KAFKA_CFG_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9092
+      KAFKA_CFG_AUTO_CREATE_TOPICS_ENABLE: "false"
+    ports:
+      - "9092:9092"
+
+  api-gateway:
+    build:
+      context: ..
+      dockerfile: services/api-gateway/Dockerfile
+    environment:
+      DATABASE_URL: postgresql://tambola:tambola@postgres:5432/tambola
+      REDIS_URL: redis://redis:6379
+      KAFKA_BROKERS: kafka:9092
+      JWT_ACCESS_SECRET: "dev_access_secret_please_change"
+      JWT_REFRESH_SECRET: "dev_refresh_secret_please_change"
+      FF_NEW_AUTH: "1"
+    ports:
+      - "3010:3010"
+    depends_on:
+      - postgres
+      - redis
+      - kafka
+
+  realtime-gateway:
+    build:
+      context: ..
+      dockerfile: services/realtime-gateway/Dockerfile
+    environment:
+      DATABASE_URL: postgresql://tambola:tambola@postgres:5432/tambola
+      REDIS_URL: redis://redis:6379
+      KAFKA_BROKERS: kafka:9092
+      JWT_ACCESS_SECRET: "dev_access_secret_please_change"
+      JWT_REFRESH_SECRET: "dev_refresh_secret_please_change"
+      FF_KAFKA_EVENTS: "1"
+    ports:
+      - "3020:3020"
+    depends_on:
+      - postgres
+      - redis
+      - kafka
+
+  game-orchestrator:
+    build:
+      context: ..
+      dockerfile: services/game-orchestrator/Dockerfile
+    environment:
+      DATABASE_URL: postgresql://tambola:tambola@postgres:5432/tambola
+      REDIS_URL: redis://redis:6379
+      KAFKA_BROKERS: kafka:9092
+      FF_KAFKA_EVENTS: "1"
+      FF_GAME_ORCHESTRATOR: "1"
+    ports:
+      - "3030:3030"
+    depends_on:
+      - postgres
+      - redis
+      - kafka
